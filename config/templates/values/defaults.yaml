@@ -299,7 +299,7 @@ storage:
     name: workload-pvc
     size: 20Gi
     accessModes:
-      - ReadWriteMany
+      - ReadWriteOnce
     storageClassName: *storage_class
 
   modelPvc:

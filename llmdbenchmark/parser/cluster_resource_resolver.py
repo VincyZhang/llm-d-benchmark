@@ -142,9 +142,10 @@ class ClusterResourceResolver:
         "rdma/ib",
     ]
 
-    def __init__(self, logger: Any, dry_run: bool = False) -> None:
+    def __init__(self, logger: Any, dry_run: bool = False, kubeconfig: str | None = None) -> None:
         self.logger = logger
         self.dry_run = dry_run
+        self._kubeconfig = kubeconfig
         self._node_resources: NodeResources | None = None
         self._api_client: Any = None
         self._connected = False
@@ -234,7 +235,7 @@ class ClusterResourceResolver:
                     "Install with: pip install kubernetes"
                 )
 
-            self._api_client = kube_connect()
+            self._api_client = kube_connect(kubeconfig=self._kubeconfig)
             self._connected = True
             self.logger.log_info("Connected to cluster for resource auto-detection")
             return True

@@ -98,9 +98,9 @@ def add_subcommands(
     teardown_parser.add_argument(
         "--fma-teardown-timeout",
         type=int,
-        default=env_int("LLMDBENCH_FMA_TEARDOWN_TIMEOUT"),
+        default=env_int("LLMDBENCH_FMA_TEARDOWN_TIMEOUT", 300),
         help="Seconds to wait for FMA launcher and requester pods to terminate "
-        "before the Helm chart uninstall removes the controller. Default: 120.",
+        "before the Helm chart uninstall removes the controller. Default: 300.",
     )
     teardown_parser.add_argument(
         "--llmd-repo-path",

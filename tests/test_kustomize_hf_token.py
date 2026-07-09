@@ -112,6 +112,8 @@ def _clear_hf_env(monkeypatch):
     """Strip every HF-token env var so each test starts clean."""
     for var in ("HF_TOKEN", "LLMDBENCH_HF_TOKEN", "HUGGING_FACE_HUB_TOKEN"):
         monkeypatch.delenv(var, raising=False)
+    monkeypatch.delenv("HF_HOME", raising=False)
+    monkeypatch.setenv("HOME", "/nonexistent-hf-home")
 
 
 class TestEnsureHfTokenSecret:
@@ -199,6 +201,27 @@ class TestEnsureHfTokenSecret:
         assert manifest["metadata"]["namespace"] == "ns42"
         expected_b64 = base64.b64encode(token.encode("utf-8")).decode("ascii")
         assert manifest["data"]["HF_TOKEN"] == expected_b64
+
+    def test_cache_file_token_is_used_when_env_is_empty(self, monkeypatch, tmp_path):
+        """The Hugging Face cache token file is the final fallback."""
+        _clear_hf_env(monkeypatch)
+        hf_home = tmp_path / ".cache" / "huggingface"
+        hf_home.mkdir(parents=True, exist_ok=True)
+        token = "hf_from_cache_file"
+        (hf_home / "token").write_text(token, encoding="utf-8")
+        monkeypatch.setenv("HF_HOME", str(hf_home))
+
+        cmd = FakeCommandExecutor(
+            get_handler=lambda *a, **k: FakeResult(success=False),
+            apply_handler=lambda *a, **k: FakeResult(success=True),
+        )
+        ctx = _fake_context()
+
+        result = KustomizeDeployStep._ensure_hf_token_secret(cmd, ctx, "ns-cache")
+
+        assert result is None
+        expected_b64 = base64.b64encode(token.encode("utf-8")).decode("ascii")
+        assert cmd.apply_manifests[0]["data"]["HF_TOKEN"] == expected_b64
 
     def test_token_never_appears_in_any_captured_command_arg(self, monkeypatch, capsys):
         """The HF token value must never reach the kubectl argv (which

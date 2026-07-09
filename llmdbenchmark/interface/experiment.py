@@ -3,7 +3,7 @@
 import argparse
 
 from llmdbenchmark.interface.commands import Command
-from llmdbenchmark.interface.env import env, env_int
+from llmdbenchmark.interface.env import env, env_bool, env_int
 
 
 def add_subcommands(
@@ -111,13 +111,13 @@ def add_subcommands(
     exp_parser.add_argument(
         "--wait-timeout",
         type=int,
-        default=env_int("LLMDBENCH_WAIT_TIMEOUT"),
+        default=env_int("LLMDBENCH_WAIT_TIMEOUT", 7200),
         help="Seconds to wait for harness completion (0 = do not wait).",
     )
     exp_parser.add_argument(
         "--data-access-timeout",
         type=int,
-        default=env_int("LLMDBENCH_DATA_ACCESS_TIMEOUT"),
+        default=env_int("LLMDBENCH_DATA_ACCESS_TIMEOUT", 600),
         help="Seconds to wait for the harness data-access pod to become Ready.",
     )
     exp_parser.add_argument(
@@ -143,6 +143,9 @@ def add_subcommands(
     exp_parser.add_argument(
         "--skip-teardown",
         action="store_true",
-        default=False,
-        help="Skip teardown phase (leave stacks running for debugging).",
+        default=env_bool("LLMDBENCH_SKIP_TEARDOWN", False),
+        help=(
+            "Skip teardown phase (leave stacks running for debugging). "
+            "Can also be enabled with LLMDBENCH_SKIP_TEARDOWN=1."
+        ),
     )

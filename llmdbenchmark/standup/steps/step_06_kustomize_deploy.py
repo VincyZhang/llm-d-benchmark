@@ -18,6 +18,7 @@ from llmdbenchmark.kustomize.readme_parser import (
     parse_guide_readme,
 )
 from llmdbenchmark.kustomize.variable_resolver import GuideVariableResolver
+from llmdbenchmark.utilities.endpoint import resolve_hf_token_from_sources
 
 
 class KustomizeDeployStep(Step):
@@ -408,13 +409,7 @@ class KustomizeDeployStep(Step):
         Any ``kubectl`` stderr we surface is also scrubbed of the
         literal token value as a belt-and-braces precaution.
         """
-        import os
-
-        hf_token = (
-            os.environ.get("HF_TOKEN")
-            or os.environ.get("LLMDBENCH_HF_TOKEN")
-            or os.environ.get("HUGGING_FACE_HUB_TOKEN")
-        )
+        hf_token = resolve_hf_token_from_sources()
 
         secret_name = KustomizeDeployStep._HF_SECRET_NAME
         secret_key = KustomizeDeployStep._HF_SECRET_KEY
@@ -428,6 +423,7 @@ class KustomizeDeployStep(Step):
             secret_name,
             "--namespace",
             namespace,
+            "--ignore-not-found",
             check=False,
         )
         if check.success:

@@ -7,6 +7,7 @@ import yaml
 from llmdbenchmark.executor.step import Step, StepResult, Phase
 from llmdbenchmark.executor.context import ExecutionContext
 from llmdbenchmark.executor.command import CommandExecutor
+from llmdbenchmark.utilities.endpoint import resolve_hf_token_from_sources
 
 
 class HarnessNamespaceStep(Step):
@@ -253,6 +254,37 @@ metadata:
                 context.logger.log_warning(
                     f"Could not copy HF secret to harness ns: {exc}"
                 )
+
+        hf_token = resolve_hf_token_from_sources()
+        token_value = hf_token if hf_token else "placeholder"
+        result = cmd.kube(
+            "create",
+            "secret",
+            "generic",
+            hf_token_name,
+            "-n",
+            harness_ns,
+            "--from-literal=HF_TOKEN=" + token_value,
+            "--dry-run=client",
+            "-o",
+            "yaml",
+        )
+        if result.success:
+            yaml_path = context.setup_yamls_dir() / "harness-hf-secret.yaml"
+            yaml_path.write_text(result.stdout, encoding="utf-8")
+            apply_result = cmd.kube("apply", "-f", str(yaml_path))
+            if apply_result.success:
+                context.logger.log_info(
+                    f"✅ HF token secret created in {harness_ns}"
+                )
+            else:
+                context.logger.log_warning(
+                    f"Could not create HF secret in harness ns: {apply_result.stderr}"
+                )
+        else:
+            context.logger.log_warning(
+                f"Could not create HF secret in harness ns: {result.stderr}"
+            )
 
     def _create_preprocesses_configmap(
         self,

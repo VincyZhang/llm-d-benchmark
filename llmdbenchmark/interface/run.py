@@ -127,7 +127,7 @@ def add_subcommands(
     run_parser.add_argument(
         "--wait-timeout",
         type=int,
-        default=env_int("LLMDBENCH_WAIT_TIMEOUT"),
+        default=env_int("LLMDBENCH_WAIT_TIMEOUT", 7200),
         help="Seconds to wait for harness completion (0 = do not wait).",
     )
     run_parser.add_argument(
@@ -139,13 +139,13 @@ def add_subcommands(
     run_parser.add_argument(
         "--data-access-timeout",
         type=int,
-        default=env_int("LLMDBENCH_DATA_ACCESS_TIMEOUT"),
+        default=env_int("LLMDBENCH_DATA_ACCESS_TIMEOUT", 600),
         help="Seconds to wait for the harness data-access pod to become Ready.",
     )
     run_parser.add_argument(
         "--pvc-bind-timeout",
         type=int,
-        default=env_int("LLMDBENCH_PVC_BIND_TIMEOUT"),
+        default=env_int("LLMDBENCH_PVC_BIND_TIMEOUT", 1200),
         help="Seconds to wait for the harness workload PVC to reach the "
         "Bound phase before failing the run. The PVC is the same one "
         "standup binds, so this mirrors the standup flag and accepts the "
@@ -153,7 +153,7 @@ def add_subcommands(
         "when the cluster's StorageClass provisions slowly (some shared "
         "storage backends -- weka, ceph, gpfs -- can take several minutes "
         "for the first workload-pvc bind in a fresh namespace). Default: "
-        "240. A PVC that never binds fails fast rather than masquerading "
+        "1200. A PVC that never binds fails fast rather than masquerading "
         "as a downstream pod/job timeout.",
     )
 

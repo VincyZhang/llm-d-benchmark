@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import getpass
 import json
+import os
 import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -71,6 +72,52 @@ def _silence_insecure_tls_warnings_if_disabled() -> None:
         urllib3.disable_warnings(InsecureRequestWarning)
 
 
+def _dedupe_no_proxy_entries(entries: list[str]) -> list[str]:
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for entry in entries:
+        normalized = entry.strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        deduped.append(normalized)
+    return deduped
+
+
+def _configure_proxy_bypass(configuration: client.Configuration) -> None:
+    """Ensure local kube API endpoints never go through a proxy.
+
+    The Kubernetes Python client reads proxy settings from environment
+    variables, but its ``no_proxy`` handling has historically been brittle.
+    When kubeconfig points at a local API server such as
+    ``https://127.0.0.1:45645``, a proxy in the environment can still catch
+    requests unless the exact host:port pair is excluded. We normalize the
+    bypass list here so cluster discovery stays direct even when shell proxy
+    variables are present.
+    """
+    parsed = urlparse(configuration.host or "")
+    hostname = parsed.hostname or ""
+    if hostname not in {"localhost", "127.0.0.1", "::1"}:
+        return
+
+    no_proxy_entries = _dedupe_no_proxy_entries(
+        [
+            *(os.getenv("NO_PROXY", "").split(",") if os.getenv("NO_PROXY") else []),
+            *(os.getenv("no_proxy", "").split(",") if os.getenv("no_proxy") else []),
+            *(configuration.no_proxy.split(",") if getattr(configuration, "no_proxy", None) else []),
+        ]
+    )
+
+    local_hosts = {"localhost", "127.0.0.1", "::1"}
+    no_proxy_entries.extend(sorted(local_hosts))
+    if parsed.port:
+        for host in local_hosts:
+            no_proxy_entries.append(f"{host}:{parsed.port}")
+
+    configuration.no_proxy = ",".join(_dedupe_no_proxy_entries(no_proxy_entries))
+    configuration.proxy = None
+
+
 def kube_connect(
     kubeconfig: str | None = None,
     kube_context: str | None = None,
@@ -89,6 +136,9 @@ def kube_connect(
             config_file=kubeconfig,
             context=kube_context,
         )
+        configuration = client.Configuration.get_default_copy()
+        _configure_proxy_bypass(configuration)
+        client.Configuration.set_default(configuration)
         _silence_insecure_tls_warnings_if_disabled()
         return client.ApiClient()
 
@@ -97,11 +147,16 @@ def kube_connect(
         configuration.host = cluster_url
         configuration.api_key = {"authorization": f"Bearer {token}"}
         configuration.verify_ssl = False
+        _configure_proxy_bypass(configuration)
+        client.Configuration.set_default(configuration)
         _silence_insecure_tls_warnings_if_disabled()
         return client.ApiClient(configuration)
 
     try:
         k8s_config.load_kube_config(context=kube_context)
+        configuration = client.Configuration.get_default_copy()
+        _configure_proxy_bypass(configuration)
+        client.Configuration.set_default(configuration)
         _silence_insecure_tls_warnings_if_disabled()
         return client.ApiClient()
     except k8s_config.ConfigException:

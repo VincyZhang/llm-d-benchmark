@@ -4,10 +4,12 @@ Extracted from standup/steps/step_10_smoketest.py so that both the
 smoketest step and the run phase can reuse the same logic.
 """
 
+import os
 import json
 import random
 import string
 import time
+from pathlib import Path
 
 from llmdbenchmark.executor.command import CommandExecutor
 
@@ -19,6 +21,38 @@ def _rand_suffix(length: int = 8) -> str:
 
 EPHEMERAL_POD_LABEL = "llm-d-benchmark/ephemeral=true"
 """Label applied to all ephemeral curl/smoketest pods for cleanup."""
+
+VERIFY_MODEL_KUBECTL_TIMEOUT = int(os.environ.get("LLMDBENCH_VERIFY_MODEL_TIMEOUT", "180"))
+"""Seconds to wait for the temporary verify_model pod to start."""
+
+
+def resolve_hf_token_from_sources(explicit: str | None = None) -> str | None:
+    """Resolve an HF token from explicit input, env vars, or the HF cache file."""
+    token = (explicit or "").strip()
+    if token:
+        return token
+
+    for env_name in ("HF_TOKEN", "LLMDBENCH_HF_TOKEN", "HUGGING_FACE_HUB_TOKEN"):
+        token = (os.environ.get(env_name) or "").strip()
+        if token:
+            return token
+
+    candidates = []
+    hf_home = (os.environ.get("HF_HOME") or "").strip()
+    if hf_home:
+        candidates.append(Path(hf_home) / "token")
+    candidates.append(Path.home() / ".cache" / "huggingface" / "token")
+
+    for candidate in candidates:
+        try:
+            if candidate.exists():
+                token = candidate.read_text(encoding="utf-8").strip()
+                if token:
+                    return token
+        except OSError:
+            continue
+
+    return None
 
 
 def _normalize_url_prefix(prefix: str | None) -> str:
@@ -87,6 +121,18 @@ def _build_overrides(
     return []
 
 
+def _build_no_proxy(host: str, port: str | int) -> str:
+    """Build a pod-safe NO_PROXY value for a target host and port."""
+    entries = ["127.0.0.1", "localhost"]
+    target_host = (host or "").strip()
+    target_port = str(port).strip()
+    if target_host:
+        entries.append(target_host)
+        if target_port:
+            entries.append(f"{target_host}:{target_port}")
+    return ",".join(dict.fromkeys(entries))
+
+
 def _ephemeral_label_args() -> list[str]:
     """Return kubectl args to label ephemeral pods for cleanup."""
     return [f"--labels={EPHEMERAL_POD_LABEL}"]
@@ -97,31 +143,24 @@ def cleanup_ephemeral_pods(
     namespace: str,
     logger=None,
 ) -> None:
-    """Delete all completed ephemeral pods created by smoketest/endpoint checks.
+    """Delete only successful ephemeral pods created by smoketest/endpoint checks.
 
-    Targets pods with the ``llm-d-benchmark/ephemeral=true`` label that are
-    in Succeeded or Failed phase.
+    Failed ephemeral pods are intentionally preserved so their logs remain
+    available for post-mortem debugging.
     """
-    for phase in ("Succeeded", "Failed"):
-        result = cmd.kube(
-            "delete",
-            "pods",
-            "-l",
-            EPHEMERAL_POD_LABEL,
-            f"--field-selector=status.phase={phase}",
-            "--namespace",
-            namespace,
-            check=False,
-        )
-        if (
-            result.success
-            and result.stdout.strip()
-            and "No resources" not in result.stdout
-        ):
-            if logger:
-                logger.log_info(
-                    f"Cleaned up ephemeral pods ({phase}) in ns/{namespace}"
-                )
+    result = cmd.kube(
+        "delete",
+        "pods",
+        "-l",
+        EPHEMERAL_POD_LABEL,
+        "--field-selector=status.phase=Succeeded",
+        "--namespace",
+        namespace,
+        check=False,
+    )
+    if result.success and result.stdout.strip() and "No resources" not in result.stdout:
+        if logger:
+            logger.log_info(f"Cleaned up successful ephemeral pods in ns/{namespace}")
 
 
 def find_standalone_endpoint(
@@ -725,18 +764,61 @@ def test_model_serving(
     curl_image = "quay.io/fedora/fedora"
     last_error: str | None = None
 
-    for attempt in range(1, max_retries + 1):
-        pod_name = f"smoketest-{_rand_suffix()}"
+    is_loopback_host = host in {"localhost", "127.0.0.1", "::1"}
 
+    for attempt in range(1, max_retries + 1):
         curl_cmd = (
             f"'curl -sk --retry 3 --retry-delay 3 "
             f"--retry-all-errors --max-time 30 {url} 2>&1'"
         )
 
+        if is_loopback_host:
+            result = cmd.execute(curl_cmd.strip("'"), check=False)
+
+            if result.dry_run:
+                return None
+
+            if not result.success:
+                detail = result.stderr[:200] or result.stdout[:200]
+                last_error = f"Curl to {host}:{port} failed: {detail}"
+                if _is_retryable(detail) and attempt < max_retries:
+                    cmd.logger.log_info(
+                        f"Attempt {attempt}/{max_retries}: endpoint not "
+                        f"ready, retrying in {retry_interval}s..."
+                    )
+                    time.sleep(retry_interval)
+                    continue
+                return last_error
+
+            stdout = result.stdout.strip()
+
+            if _is_retryable(stdout) and attempt < max_retries:
+                cmd.logger.log_info(
+                    f"Attempt {attempt}/{max_retries}: endpoint returned "
+                    f"transient error, retrying in {retry_interval}s..."
+                )
+                time.sleep(retry_interval)
+                continue
+
+            if expected_model and stdout:
+                check_err = validate_model_response(stdout, expected_model, host, port)
+                if check_err:
+                    if _is_retryable(stdout) and attempt < max_retries:
+                        time.sleep(retry_interval)
+                        continue
+                    return check_err
+
+            return None
+
+        pod_name = f"smoketest-{_rand_suffix()}"
+        no_proxy = _build_no_proxy(host, port)
+
         kubectl_args = (
             [
                 "run",
                 pod_name,
+                f"--request-timeout={VERIFY_MODEL_KUBECTL_TIMEOUT}s",
+                f"--pod-running-timeout={VERIFY_MODEL_KUBECTL_TIMEOUT}s",
                 "--rm",
                 "--attach",
                 "--quiet",
@@ -747,6 +829,10 @@ def test_model_serving(
             ]
             + _ephemeral_label_args()
             + override_args
+            + [
+                f"--env=NO_PROXY={no_proxy}",
+                f"--env=no_proxy={no_proxy}",
+            ]
             + [
                 "--command",
                 "--",

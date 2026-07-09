@@ -284,7 +284,7 @@ class SmoketestStep(Step):
         host: str,
         port: str | int,
         plan_config: dict | None = None,
-        timeout: int = 120,
+        timeout: int = 300,
         poll_interval: int = 10,
     ) -> str | None:
         """Check that vLLM is listening by polling /health.
@@ -352,11 +352,11 @@ class SmoketestStep(Step):
             )
             time.sleep(poll_interval)
 
-    # Default 30 minutes -- accommodates large models (DeepSeek-R1,
+    # Default 60 minutes -- accommodates large models (DeepSeek-R1,
     # Llama-3.1-405B, Qwen3-235B etc.) where weight download + load
     # across N workers can take 15+ minutes. Small models finish in
     # seconds and exit the poll loop immediately.
-    _DEFAULT_MODEL_READY_TIMEOUT = 1800
+    _DEFAULT_MODEL_READY_TIMEOUT = 3600
     _DEFAULT_MODEL_READY_POLL_INTERVAL = 15
 
     def _wait_for_model_ready(  # pylint: disable=too-many-arguments,too-many-positional-arguments

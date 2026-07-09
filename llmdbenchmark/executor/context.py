@@ -89,13 +89,13 @@ class ExecutionContext:  # pylint: disable=too-many-instance-attributes
     profile_overrides: str | None = None
     harness_output: str = "local"
     harness_parallelism: int = 1
-    harness_wait_timeout: int = 3600
+    harness_wait_timeout: int = 7200
     harness_debug: bool = False
     harness_skip_run: bool = False
     harness_service_account: str | None = None
     harness_envvars_to_pod: str | None = None
     analyze_locally: bool = False
-    harness_data_access_timeout: int = 120
+    harness_data_access_timeout: int = 600
 
     # Path to local llm-d repository clone (for kustomize method)
     llmd_repo_path: str | None = None
@@ -107,15 +107,15 @@ class ExecutionContext:  # pylint: disable=too-many-instance-attributes
     kustomize_skip_infra: bool = True
 
     # Standup pod deployment timeouts
-    kustomize_deploy_timeout: int = 900
-    standalone_deploy_timeout: int = 900
-    gateway_deploy_timeout: int = 120
-    modelservice_deploy_timeout: int = 1500
+    kustomize_deploy_timeout: int = 1800
+    standalone_deploy_timeout: int = 1800
+    gateway_deploy_timeout: int = 300
+    modelservice_deploy_timeout: int = 2400
 
-    pvc_bind_timeout: int = 240
+    pvc_bind_timeout: int = 1200
 
     # Teardown timeouts
-    fma_teardown_timeout: int = 120
+    fma_teardown_timeout: int = 300
 
     # Run-only mode (existing-stack)
     endpoint_url: str | None = None

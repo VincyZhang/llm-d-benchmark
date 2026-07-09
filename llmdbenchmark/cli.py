@@ -105,6 +105,7 @@ def dispatch_cli(args: argparse.Namespace, logger: logging.Logger) -> None:
         cluster_resource_resolver = ClusterResourceResolver(
             logger=logger,
             dry_run=args.dry_run,
+            kubeconfig=getattr(args, "kubeconfig", None),
         )
 
         render_plan_errors = RenderPlans(
@@ -454,15 +455,15 @@ def _do_standup(args, logger, render_plan_errors):
         model_name=plan_info.get("model_name"),
         logger=logger,
         standalone_deploy_timeout=int(
-            getattr(args, "standalone_deploy_timeout", 900) or 900
+            getattr(args, "standalone_deploy_timeout", 1800) or 1800
         ),
-        gateway_deploy_timeout=int(getattr(args, "gateway_deploy_timeout", 120) or 120),
+        gateway_deploy_timeout=int(getattr(args, "gateway_deploy_timeout", 300) or 300),
         modelservice_deploy_timeout=int(
-            getattr(args, "modelservice_deploy_timeout", 1500) or 1500
+            getattr(args, "modelservice_deploy_timeout", 2400) or 2400
         ),
-        pvc_bind_timeout=int(getattr(args, "pvc_bind_timeout", 240) or 240),
+        pvc_bind_timeout=int(getattr(args, "pvc_bind_timeout", 1200) or 1200),
         kustomize_deploy_timeout=int(
-            getattr(args, "kustomize_deploy_timeout", 900) or 900
+            getattr(args, "kustomize_deploy_timeout", 1800) or 1800
         ),
         llmd_repo_path=getattr(args, "llmd_repo_path", None),
         kustomize_skip_infra=not getattr(args, "full_infra", False),
@@ -834,7 +835,7 @@ def _do_run(args, logger, render_plan_errors, experiment_file_override=None):
         harness_wait_timeout=int(
             getattr(args, "wait_timeout", None)
             if getattr(args, "wait_timeout", None) is not None
-            else (plan_info.get("harness", {}) or {}).get("waitTimeout") or 3600
+            else (plan_info.get("harness", {}) or {}).get("waitTimeout") or 7200
         ),
         harness_debug=getattr(args, "debug", False),
         harness_skip_run=getattr(args, "skip", False),
@@ -846,9 +847,9 @@ def _do_run(args, logger, render_plan_errors, experiment_file_override=None):
         generate_config_only=getattr(args, "generate_config", False),
         dataset_url=getattr(args, "dataset", None),
         harness_data_access_timeout=int(
-            getattr(args, "data_access_timeout", 120) or 120
+            getattr(args, "data_access_timeout", 600) or 600
         ),
-        pvc_bind_timeout=int(getattr(args, "pvc_bind_timeout", 240) or 240),
+        pvc_bind_timeout=int(getattr(args, "pvc_bind_timeout", 1200) or 1200),
         stack_filter=_parse_stack_filter(getattr(args, "stack", None)),
     )
 
