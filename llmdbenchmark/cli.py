@@ -442,6 +442,7 @@ def _do_standup(args, logger, render_plan_errors):
     context = ExecutionContext(
         plan_dir=config.plan_dir,
         workspace=config.workspace,
+        base_dir=args.base_dir,
         specification_file=getattr(args, "specification_file", None),
         rendered_stacks=rendered_paths,
         dry_run=config.dry_run,
@@ -536,6 +537,7 @@ def _do_smoketest(args, logger, render_plan_errors):
     context = ExecutionContext(
         plan_dir=config.plan_dir,
         workspace=config.workspace,
+        base_dir=args.base_dir,
         specification_file=getattr(args, "specification_file", None),
         rendered_stacks=rendered_paths,
         dry_run=config.dry_run,
@@ -731,6 +733,7 @@ def _do_teardown(args, logger, render_plan_errors):
     context = ExecutionContext(
         plan_dir=config.plan_dir,
         workspace=config.workspace,
+        base_dir=args.base_dir,
         specification_file=getattr(args, "specification_file", None),
         rendered_stacks=rendered_paths,
         dry_run=config.dry_run,
@@ -814,6 +817,7 @@ def _do_run(args, logger, render_plan_errors, experiment_file_override=None):
     context = ExecutionContext(
         plan_dir=config.plan_dir,
         workspace=config.workspace,
+        base_dir=args.base_dir,
         specification_file=getattr(args, "specification_file", None),
         rendered_stacks=rendered_paths,
         dry_run=config.dry_run,

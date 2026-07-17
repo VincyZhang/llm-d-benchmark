@@ -86,6 +86,13 @@ class RenderProfilesStep(Step):
             runtime_values["LLMDBENCH_DEPLOY_CURRENT_MODEL"] = context.model_name
             runtime_values["LLMDBENCH_DEPLOY_CURRENT_TOKENIZER"] = context.model_name
 
+            model_config = plan_config.get("model", {}) if isinstance(plan_config, dict) else {}
+            cache_base = str(model_config.get("cacheBase") or "").strip()
+            if cache_base:
+                runtime_values["LLMDBENCH_DEPLOY_CURRENT_TOKENIZER"] = str(
+                    Path(cache_base) / context.model_name
+                )
+
         dataset_file_override: str | None = None
         if context.dataset_url:
             # For s3:// URLs the harness shell script downloads the file into

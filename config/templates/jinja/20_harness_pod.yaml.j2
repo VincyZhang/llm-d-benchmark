@@ -140,6 +140,15 @@ spec:
       mountPath: /workspace/profiles/{{ harness.name }}
     - name: harness-scripts
       mountPath: /workspace/harnesses
+{% if hf_cache_host_path is defined and hf_cache_host_path %}
+    - name: model-cache-hostpath
+      mountPath: /model-cache
+      readOnly: true
+{% elif storage is defined and storage.modelPvc is defined and storage.modelPvc.name is defined %}
+    - name: model-cache
+      mountPath: {{ modelArtifacts.mountPath | default('/model-cache') }}
+      readOnly: true
+{% endif %}
   volumes:
   - name: results
     persistentVolumeClaim:
@@ -151,6 +160,16 @@ spec:
     configMap:
       name: llmdbench-harness-scripts
       defaultMode: 0755
+{% if hf_cache_host_path is defined and hf_cache_host_path %}
+  - name: model-cache-hostpath
+    hostPath:
+      path: {{ hf_cache_host_path }}
+      type: Directory
+{% elif storage is defined and storage.modelPvc is defined and storage.modelPvc.name is defined %}
+  - name: model-cache
+    persistentVolumeClaim:
+      claimName: {{ storage.modelPvc.name }}
+{% endif %}
 {% if vllmCommon.pullSecret is defined and vllmCommon.pullSecret %}
   imagePullSecrets:
   - name: {{ vllmCommon.pullSecret }}
